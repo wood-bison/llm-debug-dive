@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llm-debug-dive-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: llm_debug
+      POSTGRES_USER: llm_debug
+      POSTGRES_PASSWORD: llm_debug
+    ports:
+      - "55432:5432"
+    volumes:
+      - llm-debug-dive-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llm_debug -d llm_debug"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  llm-debug-dive-postgres:

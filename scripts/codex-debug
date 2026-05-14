@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# codex-debug — run Codex through LLM Debug Dive in full mode.
+
+set -euo pipefail
+
+CALLER_DIR="$(pwd)"
+PROXY_PORT="${PROXY_PORT:-8787}"
+PROXY_HOSTNAME="${PROXY_HOSTNAME:-127.0.0.1}"
+OPEN_BROWSER=1
+ARGS=()
+
+for a in "$@"; do
+  if [[ "$a" == "--no-open" ]]; then
+    OPEN_BROWSER=0
+  else
+    ARGS+=("$a")
+  fi
+done
+
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/runtime.sh"
+
+BUN="$(command -v bun || echo "$HOME/.bun/bin/bun")"
+[[ -x "$BUN" ]] || { echo "✗ bun not found" >&2; exit 1; }
+
+CODEX_BIN="$(command -v codex || true)"
+[[ -n "$CODEX_BIN" ]] || CODEX_BIN="/Applications/Codex.app/Contents/Resources/codex"
+[[ -x "$CODEX_BIN" ]] || { echo "✗ codex not found. Open Codex.app once or add codex to PATH." >&2; exit 1; }
+
+ensure_proxy "$REPO_DIR" "$BUN" "$PROXY_HOSTNAME" "$PROXY_PORT" "$OPEN_BROWSER"
+PROXY_URL="$(last_proxy_url)"
+
+echo
+echo "Dashboards:"
+echo "  llm-debug-dive  ${PROXY_URL}/dashboard"
+echo
+
+AUTH_MODE="$(grep -o '"auth_mode"[[:space:]]*:[[:space:]]*"[^"]*"' "$HOME/.codex/auth.json" 2>/dev/null | sed -E 's/.*"auth_mode"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || true)"
+
+if [[ "$AUTH_MODE" == "chatgpt" ]]; then
+  echo "→ ChatGPT auth detected; proxying ChatGPT backend via ${PROXY_URL}/backend-api"
+  exec "$CODEX_BIN" \
+    -C "$CALLER_DIR" \
+    -c "chatgpt_base_url=\"${PROXY_URL}/backend-api\"" \
+    "${ARGS[@]+"${ARGS[@]}"}"
+fi
+
+echo "→ API-key auth detected; proxying OpenAI API via ${PROXY_URL}/v1"
+exec env OPENAI_BASE_URL="${PROXY_URL}/v1" "$CODEX_BIN" \
+  -C "$CALLER_DIR" \
+  -c "openai_base_url=\"${PROXY_URL}/v1\"" \
+  "${ARGS[@]+"${ARGS[@]}"}"

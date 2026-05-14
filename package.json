@@ -1,0 +1,20 @@
+{
+  "name": "llm-debug-dive",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/proxy.ts",
+    "build": "bun build src/proxy.ts --target=bun --outfile=dist/proxy.js",
+    "start": "bun run dist/proxy.js",
+    "verify": "bash scripts/verify.sh",
+    "demo:seed": "bun run scripts/seed-demo.ts",
+    "view": "bun run src/view.ts"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# claude-debug — run Claude Code through LLM Debug Dive in full mode.
+
+set -euo pipefail
+
+CALLER_DIR="$(pwd)"
+PROXY_PORT="${PROXY_PORT:-8787}"
+PROXY_HOSTNAME="${PROXY_HOSTNAME:-127.0.0.1}"
+OPEN_BROWSER=1
+ARGS=()
+
+for a in "$@"; do
+  if [[ "$a" == "--no-open" ]]; then
+    OPEN_BROWSER=0
+  else
+    ARGS+=("$a")
+  fi
+done
+
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/runtime.sh"
+
+BUN="$(command -v bun || echo "$HOME/.bun/bin/bun")"
+[[ -x "$BUN" ]] || { echo "✗ bun not found" >&2; exit 1; }
+
+CLAUDE_BIN="$(command -v claude || true)"
+[[ -x "$CLAUDE_BIN" ]] || { echo "✗ claude not found in PATH. Install Claude Code first." >&2; exit 1; }
+
+ensure_proxy "$REPO_DIR" "$BUN" "$PROXY_HOSTNAME" "$PROXY_PORT" "$OPEN_BROWSER"
+PROXY_URL="$(last_proxy_url)"
+
+echo
+echo "Dashboards:"
+echo "  llm-debug-dive  ${PROXY_URL}/dashboard"
+echo
+
+cd "$CALLER_DIR"
+exec env ANTHROPIC_BASE_URL="${PROXY_URL}" "$CLAUDE_BIN" \
+  "${ARGS[@]+"${ARGS[@]}"}"
