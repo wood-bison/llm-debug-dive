@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: llm_debug
       POSTGRES_PASSWORD: llm_debug
     ports:
-      - "55432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
     volumes:
       - llm-debug-dive-postgres:/var/lib/postgresql/data
     healthcheck:

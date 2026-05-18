@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# codex-debug — run Codex through LLM Debug Dive in full mode.
 
 set -euo pipefail
 

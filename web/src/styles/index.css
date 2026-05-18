@@ -1,0 +1,96 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@import './tokens.css';
+
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --radius-xl: var(--radius-panel);
+  --radius-md: var(--radius-control);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-sunken: var(--surface-sunken);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-focus: var(--focus);
+  --color-fresh: var(--fresh);
+  --color-cache: var(--cache);
+  --color-write: var(--write);
+  --color-output: var(--output);
+  --color-good: var(--good);
+  --color-warning: var(--warning);
+  --color-serious: var(--serious);
+  --color-critical: var(--critical);
+  --color-good-ink: var(--good-ink);
+  --color-warning-ink: var(--warning-ink);
+}
+
+@layer base {
+  html {
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss02';
+    -webkit-font-smoothing: antialiased;
+    text-size-adjust: 100%;
+    accent-color: var(--focus);
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100dvh;
+    margin: 0;
+  }
+
+  ::selection {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--focus) 24%, var(--surface));
+  }
+
+  :root {
+    scrollbar-color: var(--line-strong) var(--page);
+    scrollbar-width: thin;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility navigation-glass {
+  background: var(--navigation-surface);
+  backdrop-filter: blur(var(--navigation-blur)) saturate(140%);
+  box-shadow: 0 1px 0 var(--navigation-highlight);
+}
+
+@layer base {
+  button, a, summary { -webkit-tap-highlight-color: transparent; }
+  button:not(:disabled), summary { cursor: pointer; }
+  @media (prefers-reduced-transparency: reduce) {
+    .navigation-glass { background: var(--surface); backdrop-filter: none; }
+  }
+  @media (prefers-contrast: more) {
+    :root { --line: var(--line-strong); --ink-faint: var(--ink-soft); }
+    .navigation-glass { background: var(--surface); backdrop-filter: none; }
+  }
+}

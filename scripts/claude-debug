@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# claude-debug — run Claude Code through LLM Debug Dive in full mode.
 
 set -euo pipefail
 

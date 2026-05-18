@@ -1,171 +1,70 @@
-# llm-debug-dive
+# LLM Debug Dive
 
-Local dashboard for understanding AI agent runs from Codex, Claude Code, and other API-compatible agents: what you asked, what the agent did, which tools ran, how many tokens moved, where work repeated, and how to make the next prompt cheaper.
+A local debugger for AI agent runs. See prompts, model calls, tools, token usage and estimated cost in one place.
 
-It is built for daily Codex/Claude debugging, not for production observability.
+## Quick start
 
-## What you get
+Requires [Bun](https://bun.sh) 1.3.14 or newer and Docker with Compose.
 
-- Live dashboard at `http://127.0.0.1:8787/dashboard`
-- Built-in guide/glossary at `http://127.0.0.1:8787/dashboard/guide`
-- Trace replay per user prompt
-- Tool timeline and repeated-work signals
-- Token load, cache hit, latency, estimated cost when pricing is known
-- Prompt Coach with evidence, impact, and cheaper next prompt
-- Optional local Ollama second opinion, so prompt critique does not spend cloud tokens
-
-## Requirements
-
-Install these first:
-
-- [Bun](https://bun.sh)
-- Docker Desktop, for local Postgres
-- Codex CLI or Codex app, for `codex-debug`
-- Claude Code, for `claude-debug`
-- Ollama, optional, for local model review
-
-Check the basics:
-
-```bash
-bun --version
-docker --version
-codex --version
+```sh
+bun run setup
+bun run start
 ```
 
-## Install wrappers
+Open [the dashboard](http://127.0.0.1:8787/dashboard). Select a run, follow its timeline, then open a model call to inspect the conversation and raw payloads. The in-app guide explains the metrics.
 
-Clone the repo and enter it:
+## Preview
 
-```bash
-git clone git@github.com:wood-bison/llm-debug-dive.git
-cd llm-debug-dive
-```
+Sample data from a disposable local database:
 
-Install the launcher scripts:
+![Runs dashboard with token load and cache usage](docs/images/dashboard.jpg)
 
-```bash
+![Run detail with token composition and a model/tool timeline](docs/images/trace.jpg)
+
+To create sample runs, execute `bun run demo:seed`. It replaces only traces whose external ID starts with `demo:`. Use a development database.
+
+## Capture agent runs
+
+Install the matching agent CLI, then link the launchers:
+
+```sh
 mkdir -p ~/.local/bin
 ln -sf "$PWD/scripts/codex-debug" ~/.local/bin/codex-debug
 ln -sf "$PWD/scripts/claude-debug" ~/.local/bin/claude-debug
 ```
 
-Make sure `~/.local/bin` is in your shell path:
+Add `~/.local/bin` to your PATH. Run `codex-debug` or `claude-debug` from the project you want to inspect. Each launcher builds the app, starts local services and routes its agent through the proxy. Use `--no-open` to skip the browser.
 
-```bash
-echo $PATH
+## Development
+
+```sh
+bun install --frozen-lockfile
+bun run check
 ```
 
-If it is missing, add this to `~/.zshrc`:
+Run `bun run dev` for the server and `bun run dev:web` in a second terminal for React hot reload. Open `/dashboard` on the Vite server. Production serves the built dashboard and API from Bun; rebuild after frontend changes.
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
+`bun run check` runs lint, strict TypeScript, regression tests and the production build. Against a running server, `bun run verify` checks local HTTP routes without paid provider calls. `bun run view` prints a terminal usage report.
 
-Then restart the terminal.
+## Configuration
 
-## Run an agent through the debugger
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | `postgres://llm_debug:llm_debug@127.0.0.1:55432/llm_debug` | Postgres connection |
+| `POSTGRES_PORT` | `55432` | Docker host port; match `DATABASE_URL` when changed |
+| `PROXY_PORT` | `8787` | App and proxy port |
+| `PROXY_HOSTNAME` | `127.0.0.1` | Bind address |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Optional local reviewer |
+| `CODEX_SESSIONS_DIR` | `~/.codex/sessions` | Local agent transcripts |
+| `LLM_DEBUG_API` | `http://127.0.0.1:8787` | Vite's API target |
+| `PROXY_URL` | `http://127.0.0.1:8787` | HTTP verification target |
 
-Go to any project you want to work on:
+Additional server defaults are defined in [src/config.ts](src/config.ts).
 
-```bash
-cd /path/to/your/project
-codex-debug
-```
+Keep the app local: captured prompts and tool output may contain private data. There is no authentication or multi-user isolation. Unknown prices and heuristic signals do not establish correctness or successful verification.
 
-Or with Claude Code:
+## Architecture
 
-```bash
-cd /path/to/your/project
-claude-debug
-```
+`src/domain` holds pure analysis rules. `src/application` defines use cases and typed ports. `src/infrastructure` implements storage and provider adapters. `src/presentation` exposes HTTP and CLI interfaces. `src/contracts` validates the shared API; `web/src` contains React features and semantic Tailwind tokens. `src/app.ts` composes the dependencies.
 
-This starts everything needed:
-
-1. local Postgres in Docker on `:55432`
-2. Bun proxy on `:8787`
-3. dashboard at `http://127.0.0.1:8787/dashboard`
-4. Codex or Claude connected through the proxy
-
-For one-shot runs:
-
-```bash
-codex-debug exec "explain this repo structure"
-claude-debug -p "explain this repo structure"
-```
-
-Without opening the browser:
-
-```bash
-codex-debug --no-open
-claude-debug --no-open
-```
-
-## Optional: Ollama review
-
-If Ollama is running, trace pages show a local model review button.
-
-Example models:
-
-```bash
-ollama list
-ollama pull qwen3.6:27b
-ollama pull gemma4:26b
-```
-
-Use this for cheap prompt scoring, skill critique, and repeated-tool diagnosis.
-
-## Manual development mode
-
-For hacking on the dashboard itself:
-
-```bash
-cd llm-debug-dive
-bun install
-docker compose up -d postgres
-bun run build
-bun run start
-```
-
-Open:
-
-```text
-http://127.0.0.1:8787/dashboard
-```
-
-## Verify
-
-With the proxy running:
-
-```bash
-bun run verify
-```
-
-Build check:
-
-```bash
-bunx tsc --noEmit
-bun run build
-```
-
-## Useful commands
-
-```bash
-# show proxy log
-tail -f /tmp/llm-debug-proxy.log
-
-# stop local Postgres
-docker compose down
-
-# delete local Postgres data
-docker compose down -v
-
-# seed demo traces
-bun run demo:seed
-```
-
-## Notes
-
-- External labs like Langfuse and Phoenix are intentionally not required.
-- The source of truth is local Postgres plus the LLM Debug Dive UI.
-- `codex-debug` and `claude-debug` are the normal entry points.
-- If port `8787` is busy, the wrapper tries fallback ports.
+Decisions live in [docs/adr](docs/adr): [dependency boundaries](docs/adr/0001-dependency-boundaries.md), [React and API contracts](docs/adr/0002-react-dashboard.md), [visual tokens](docs/adr/0003-visual-system.md).
