@@ -1,7 +1,7 @@
 import { emptyUsage, type NewSpan, type ToolInvocation, type Usage } from '../domain/telemetry'
 import { HTTP_STATUS } from '../shared/httpStatus'
 import { truncate } from '../shared/format'
-import type { Logger, ProviderProtocol, TelemetryWriter } from './ports'
+import type { Logger, ProviderProtocol, SpanCostEstimator, TelemetryWriter } from './ports'
 import { toObservation, type SpanObserver } from './spanObserver'
 
 const MAX_STORED_BODY_CHARS = 20_000
@@ -32,6 +32,7 @@ export interface ExchangeRecorderDeps {
   observer: SpanObserver
   logger: Logger
   requestTools: (requestBody: string | undefined) => ToolInvocation[]
+  costEstimator?: SpanCostEstimator
   now?: () => number
 }
 
@@ -72,6 +73,8 @@ export function createExchangeRecorder(deps: ExchangeRecorderDeps) {
         requestBody: body ?? null,
         responseBody: captured.responseBody,
       }
+      span.costQuote = deps.costEstimator?.(span) ?? null
+      span.responseBody = span.responseBody?.slice(0, MAX_STORED_BODY_CHARS) ?? null
       const spanId = await writer.insertSpan(span)
       if (captured.tools.length > 0) await writer.insertToolInvocations(spanId, traceId, endedAt, captured.tools)
       observer.observe(toObservation(spanId, externalId, span))
@@ -94,7 +97,7 @@ export function createExchangeRecorder(deps: ExchangeRecorderDeps) {
         const captured: Captured = {
           status: result.kind === 'stream' && result.aborted ? HTTP_STATUS.proxyError : result.status,
           isStream,
-          responseBody: result.body.slice(0, MAX_STORED_BODY_CHARS),
+          responseBody: result.body,
           usage: isStream ? protocol.usageStream(result.body) : usageWithRequestFallback(protocol, result.body, body),
           tools: [...protocol.toolInvocations(result.body, isStream), ...deps.requestTools(body)],
         }

@@ -1,8 +1,7 @@
 import { cacheHitRate } from '../../domain/metrics'
-import { spanCost } from '../../domain/pricing'
 import { sumBy } from '../../shared/collections'
 import { errorMessage } from '../../shared/format'
-import type { LocalReview, LocalReviewer, ReviewStore, TelemetryReader } from '../ports'
+import type { LocalReview, LocalReviewer, ReviewStore, SpanCostEstimator, TelemetryReader } from '../ports'
 import type { TurnQueries } from '../turns'
 import { PROMPT_NOT_CAPTURED, coachFor } from './shared'
 
@@ -18,11 +17,12 @@ export interface LocalReviewDeps {
   reviews: ReviewStore
   reviewer: LocalReviewer
   turns: TurnQueries
+  costEstimator: SpanCostEstimator
   now?: () => number
 }
 
 export function createLocalReviewCommand(deps: LocalReviewDeps) {
-  const { reader, reviews, reviewer, turns } = deps
+  const { reader, reviews, reviewer, turns, costEstimator } = deps
   const now = deps.now ?? Date.now
 
   return async function reviewLocally(traceId: number, model: string): Promise<LocalReviewOutcome> {
@@ -34,7 +34,7 @@ export function createLocalReviewCommand(deps: LocalReviewDeps) {
     const coach = coachFor(trace, spans, {
       prompt: turns.firstPrompt(spans) ?? localTurn?.prompt ?? PROMPT_NOT_CAPTURED,
       tools: localTurn?.tools ?? [],
-      totalCost: sumBy(spans, spanCost),
+      totalCost: sumBy(spans, (span) => costEstimator(span).knownUsd),
       hit: cacheHitRate(trace.totals.input, trace.totals.cacheRead, trace.totals.cacheCreation),
     })
 

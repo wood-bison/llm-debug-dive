@@ -18,7 +18,7 @@ import {
   toolInvocation,
 } from './shared'
 
-const TokenDetails = lenient(wireObject({ cached_tokens: optNumber }))
+const TokenDetails = lenient(wireObject({ cached_tokens: optNumber, cache_write_tokens: optNumber }))
 
 const OpenAiUsage = wireObject({
   input_tokens: optNumber,
@@ -105,7 +105,7 @@ export const openaiProtocol: ProviderProtocol = {
 
   usageNonStream(body) {
     const usage = parseJsonAs(ChatResponse, body)?.usage
-    return usage ? { ...toUsage(usage), cacheCreation: null } : emptyUsage()
+    return usage ? toUsage(usage) : emptyUsage()
   },
 
   usageStream(chunks) {
@@ -113,8 +113,8 @@ export const openaiProtocol: ProviderProtocol = {
     for (const event of parseSseEvents(StreamEvent, chunks)) {
       const reported = completedUsage(event) ?? event.usage
       if (!reported) continue
-      const { input, output, cacheRead } = toUsage(reported)
-      mergeUsage(usage, { input, output, cacheRead })
+      const { input, output, cacheRead, cacheCreation } = toUsage(reported)
+      mergeUsage(usage, { input, output, cacheRead, cacheCreation })
     }
     return usage
   },
@@ -150,7 +150,7 @@ function toUsage(u: OpenAiUsage): Usage {
     input: u.input_tokens ?? u.prompt_tokens ?? null,
     output: u.output_tokens ?? u.completion_tokens ?? null,
     cacheRead: u.input_tokens_details?.cached_tokens ?? u.prompt_tokens_details?.cached_tokens ?? null,
-    cacheCreation: null,
+    cacheCreation: u.input_tokens_details?.cache_write_tokens ?? u.prompt_tokens_details?.cache_write_tokens ?? null,
   }
 }
 

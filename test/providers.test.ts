@@ -45,8 +45,8 @@ describe('openai', () => {
   const openai = providers.get('openai')
 
   test('chat completions usage counts cached tokens as cache reads', () => {
-    const body = JSON.stringify({ usage: { prompt_tokens: 100, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 40 } } })
-    expect(openai.usageNonStream(body)).toEqual({ input: 100, output: 5, cacheRead: 40, cacheCreation: null })
+    const body = JSON.stringify({ usage: { prompt_tokens: 100, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 40, cache_write_tokens: 10 } } })
+    expect(openai.usageNonStream(body)).toEqual({ input: 100, output: 5, cacheRead: 40, cacheCreation: 10 })
   })
 
   test('streamed tool-call deltas are joined per call id', () => {
@@ -62,6 +62,13 @@ describe('chatgpt', () => {
   test('finds usage nested anywhere in camelCase or snake_case', () => {
     const body = JSON.stringify({ a: { b: [{ usage: { inputTokens: 7, cached_input_tokens: 3 } }] } })
     expect(providers.get('chatgpt').usageNonStream(body)).toEqual({ input: 7, output: null, cacheRead: 3, cacheCreation: null })
+  })
+})
+
+describe('google', () => {
+  test('normalizes billed thinking tokens into output usage', () => {
+    const body = JSON.stringify({ usageMetadata: { promptTokenCount: 12, cachedContentTokenCount: 2, candidatesTokenCount: 5, thoughtsTokenCount: 7, totalTokenCount: 24 } })
+    expect(providers.get('google').usageNonStream(body)).toEqual({ input: 12, output: 12, cacheRead: 2, cacheCreation: null })
   })
 })
 

@@ -1,4 +1,5 @@
 import type { CodexLocalTurn, CodexTurnStats } from '../domain/codex'
+import type { CostQuote } from '../domain/costs'
 import type {
   ConversationView,
   NewSpan,
@@ -51,6 +52,8 @@ export interface TelemetryWriter {
   insertSpan(span: NewSpan): Promise<number>
   insertToolInvocations(spanId: number, traceId: number | null, invokedAt: number, tools: ToolInvocation[]): Promise<void>
 }
+
+export type SpanCostEstimator = (span: NewSpan) => CostQuote
 
 export interface StatsTotals {
   spans: number
@@ -109,6 +112,8 @@ export interface TelemetryReader {
   traceById(id: number): Promise<Trace | undefined>
   spansByTrace(traceId: number): Promise<Span[]>
   spanCosts(traceIds: number[]): Promise<Map<number, SpanCost[]>>
+  costSpans(f: QueryFilters): Promise<Span[]>
+  costSpansByTraceIds(traceIds: number[]): Promise<Span[]>
   recentTraceCandidates(f: QueryFilters, limit: number): Promise<TraceCandidate[]>
   countTracesBefore(f: QueryFilters): Promise<number>
   toolFootprints(traceIds: number[]): Promise<ToolFootprint[]>

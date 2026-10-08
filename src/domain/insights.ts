@@ -35,6 +35,7 @@ export interface TraceInsightInput {
   hit: number
   spanCount: number
   totalCost: number
+  costComplete?: boolean
   localTools: CodexLocalTool[]
   localNotes: number
   maxContextIn: number
@@ -52,7 +53,8 @@ export function traceInsights(args: TraceInsightInput): Insight[] {
   ]).slice(0, MAX_INSIGHTS)
 }
 
-function spendInsight({ totalCost, tokens }: TraceInsightInput): Insight | null {
+function spendInsight({ totalCost, tokens, costComplete = true }: TraceInsightInput): Insight | null {
+  if (!costComplete) return { tone: 'neutral', title: 'Incomplete cost estimate', body: 'Some usage or rates are missing. Open Cost Explorer for the known subtotal and unresolved calls.' }
   if (totalCost > 0) {
     const tone = totalCost >= TRACE_COST_USD.expensive ? 'bad' : totalCost >= TRACE_COST_USD.notable ? 'warn' : 'good'
     return {
@@ -200,6 +202,7 @@ export interface SignalInput {
   tools: CodexLocalTool[]
   tokens: TokenTotals
   totalCost: number
+  costComplete?: boolean
   hit: number
   lastStatus: number
 }
@@ -211,7 +214,9 @@ export function replaySignals(args: SignalInput): Signal[] {
   const topRepeated = args.repeated[0]
 
   return compact<Signal>([
-    args.totalCost > 0
+    args.costComplete === false
+      ? { tone: 'neutral', label: 'partial pricing', body: 'Cost Explorer lists unresolved usage and rates.' }
+      : args.totalCost > 0
       ? { tone: 'good', label: 'priced', body: `${fmtCost(args.totalCost)} estimated from model card.` }
       : { tone: 'neutral', label: 'unpriced', body: 'Model price is unknown; use token load.' },
     load >= TOKEN_LOAD.heavy && { tone: 'warn', label: 'context-heavy', body: `${fmtTokens(load)} token load.` },

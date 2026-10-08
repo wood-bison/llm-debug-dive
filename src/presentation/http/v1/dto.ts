@@ -1,3 +1,4 @@
+import type { CostSummary } from '../../../domain/costs'
 import type * as Api from '../../../contracts/api'
 import { TRACE_LIST_LIMIT } from '../../../application/dashboard'
 import type { DashboardStats, SkillReport, TraceListPage } from '../../../application/dashboard'
@@ -10,7 +11,6 @@ import { cacheHitShare } from '../../../domain/metrics'
 import { COACH_MAX_SCORE, scoreBand, scoreBands } from '../../../domain/promptCoach'
 import { PENALTY } from '../../../domain/promptCoach/rules'
 import { replaySignals } from '../../../domain/insights'
-import { spanCost } from '../../../domain/pricing'
 import type { ConvMessage, TraceReview, Usage } from '../../../domain/telemetry'
 import { freshInputTokens } from '../../../domain/metrics'
 import { CACHE_HIT_PCT, CONTEXT_WINDOW_TOKENS, TOKEN_LOAD, TRACE_COST_USD } from '../../../domain/thresholds'
@@ -53,8 +53,9 @@ export function toOverview(range: string, stats: DashboardStats, page: TraceList
       cacheHitPct: cacheHitShare(stats.tokens),
       costUsd: stats.totalCost,
       costPerCallUsd: stats.costPerCall,
+      costCoverage: costCoverage(stats.costSummary),
     },
-    turns: page.items.map(({ turn, cost, tokenLoad, durationMs, tools: tally, badges }) => ({
+    turns: page.items.map(({ turn, cost, costSummary, tokenLoad, durationMs, tools: tally, badges }) => ({
       id: turn.id,
       provider: turn.provider,
       startedAt: turn.startedAt,
@@ -67,6 +68,7 @@ export function toOverview(range: string, stats: DashboardStats, page: TraceList
       tokenLoad,
       cacheHitPct: cacheHitShare(turn.totals),
       costUsd: cost,
+      costCoverage: costCoverage(costSummary),
       tools: tally.map((t) => ({ name: t.toolName, count: t.count })),
       badges,
     })),
@@ -85,6 +87,7 @@ export function toReview(review: TraceReview): Api.LocalReview {
 
 export function toTraceDetail(replay: TraceReplay, panel: TracePanel): Api.TraceDetail {
   const { trace, coach } = replay
+  const costs = new Map(panel.cost.calls.map((call) => [call.spanId, call.quote]))
   return {
     id: trace.id,
     externalId: trace.externalId,
@@ -98,6 +101,7 @@ export function toTraceDetail(replay: TraceReplay, panel: TracePanel): Api.Trace
     tokenLoad: panel.tokenLoad,
     cacheHitPct: panel.hit,
     costUsd: panel.totalCost,
+    cost: panel.cost,
     contextPeakTokens: panel.contextPeak,
     outputTokensPerSecond: panel.outputTokensPerSecond,
     models: panel.models,
@@ -109,6 +113,7 @@ export function toTraceDetail(replay: TraceReplay, panel: TracePanel): Api.Trace
       tools: replay.replayTools,
       tokens: trace.totals,
       totalCost: panel.totalCost,
+      costComplete: panel.cost.status === 'complete',
       hit: panel.hit,
       lastStatus: replay.lastStatus,
     }),
@@ -140,7 +145,8 @@ export function toTraceDetail(replay: TraceReplay, panel: TracePanel): Api.Trace
         status: span.status,
         isStream: span.isStream,
         usage: displayUsage(span.provider, span.usage),
-        costUsd: spanCost(span),
+        costUsd: costs.get(span.id)?.knownUsd ?? 0,
+        costStatus: costs.get(span.id)?.status ?? 'unknown',
       })),
       ...replay.toolEvents.map((tool) => ({
         kind: 'tool' as const,
@@ -178,7 +184,7 @@ function body(raw: string | null): Api.SpanDetail['requestBody'] {
 function displayUsage(provider: string, usage: Usage): Usage {
   const input = usage.input
   const cacheRead = usage.cacheRead ?? 0
-  return { ...usage, input: input == null ? null : freshInputTokens(provider, input, cacheRead) }
+  return { ...usage, input: input == null ? null : freshInputTokens(provider, input, cacheRead, usage.cacheCreation ?? 0) }
 }
 
 export function toSpanDetail(v: SpanInspection): Api.SpanDetail {
@@ -197,6 +203,7 @@ export function toSpanDetail(v: SpanInspection): Api.SpanDetail {
     usage: displayUsage(span.provider, span.usage),
     reportedUsage: span.usage,
     costUsd: v.cost,
+    costQuote: v.costQuote,
     cacheHitPct: v.hit,
     messages: v.conversation.messages.map(toMessage),
     tools: v.tools.map((t) => ({ name: t.toolName, skill: t.skillName, input: t.inputPreview })),
@@ -204,4 +211,8 @@ export function toSpanDetail(v: SpanInspection): Api.SpanDetail {
     requestBody: body(span.requestBody),
     responseBody: body(span.responseBody),
   }
+}
+
+function costCoverage(summary: CostSummary): { status: CostSummary['status']; incompleteCalls: number } {
+  return { status: summary.status, incompleteCalls: summary.incompleteCalls }
 }

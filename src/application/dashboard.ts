@@ -1,11 +1,12 @@
 import type { CodexLocalTool } from '../domain/codex'
 import { tokenLoad } from '../domain/metrics'
+import { summarizeCosts, type CostSummary } from '../domain/costs'
 import { costOf } from '../domain/pricing'
 import { summarizeSkills } from '../domain/skills'
 import { totalsOf, type TokenTotals, type Turn } from '../domain/telemetry'
 import { buildEfficiencyBadges, type EfficiencyBadge } from '../domain/verdict'
-import { groupBy, sumBy } from '../shared/collections'
-import type { QueryFilters, SkillUsage, StatsTotals, TelemetryReader, ToolUsage } from './ports'
+import { groupBy } from '../shared/collections'
+import type { QueryFilters, SkillUsage, SpanCostEstimator, StatsTotals, TelemetryReader, ToolUsage } from './ports'
 import type { TurnQueries } from './turns'
 
 export const TRACE_LIST_LIMIT = 50
@@ -15,6 +16,7 @@ export interface DashboardStats {
   tokens: TokenTotals
   totalCost: number
   costPerCall: number
+  costSummary: CostSummary
 }
 
 export interface ToolTally {
@@ -25,6 +27,7 @@ export interface ToolTally {
 export interface TraceListItem {
   turn: Turn
   cost: number
+  costSummary: CostSummary
   tokenLoad: number
   durationMs: number
   tools: ToolTally[]
@@ -41,19 +44,20 @@ export interface SkillReport {
   local: Array<{ label: string; count: number; intent: string }>
 }
 
-export function createDashboardQueries(deps: { reader: TelemetryReader; turns: TurnQueries }) {
-  const { reader, turns } = deps
+export function createDashboardQueries(deps: { reader: TelemetryReader; turns: TurnQueries; costEstimator: SpanCostEstimator }) {
+  const { reader, turns, costEstimator } = deps
 
   async function stats(f: QueryFilters): Promise<DashboardStats> {
     const totals = await reader.stats(f)
-    const byModel = await reader.usageByModel(f)
-    const totalCost = sumBy(byModel, (r) => costOf(r.model, r.usage))
+    const costSummary = summarizeCosts((await reader.costSpans(f)).map(costEstimator))
+    const totalCost = costSummary.knownUsd
     const tokens = totalsOf(totals.usage)
 
     return {
       totals,
       tokens,
       totalCost,
+      costSummary,
       costPerCall: totals.spans > 0 ? totalCost / totals.spans : 0,
     }
   }
@@ -69,16 +73,19 @@ export function createDashboardQueries(deps: { reader: TelemetryReader; turns: T
     if (rows.length === 0) return []
 
     const ids = rows.map((r) => r.id)
-    const [footprints, spanCosts] = await Promise.all([reader.toolFootprints(ids), reader.spanCosts(ids)])
+    const [footprints, spans] = await Promise.all([reader.toolFootprints(ids), reader.costSpansByTraceIds(ids)])
+    const spansByTrace = groupBy(spans, (span) => span.traceId)
     const toolsByTrace = groupBy(footprints, (f) => f.traceId)
 
     return rows.map((turn) => {
-      const cost = sumBy(spanCosts.get(turn.id) ?? [], (s) => costOf(s.model, s.tokens))
+      const costSummary = summarizeCosts((spansByTrace.get(turn.id) ?? []).map(costEstimator))
+      const cost = costSummary.knownUsd
       const stored = toolsByTrace.get(turn.id)?.map(({ toolName, count }) => ({ toolName, count }))
       const tools = stored ?? turn.codexTools.map((label) => ({ toolName: label, count: null }))
       return {
         turn,
         cost,
+        costSummary,
         tokenLoad: tokenLoad(turn.totals),
         durationMs: turn.endedAt - turn.startedAt,
         tools,

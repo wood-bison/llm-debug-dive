@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { SpanRow, TraceRow } from '../src/infrastructure/postgres/rows'
+import { quoteCost } from '../src/domain/pricing'
 
 test('trace totals normalize cached OpenAI input while span details preserve provider values', () => {
   const trace = TraceRow.parse({
@@ -37,6 +38,19 @@ test('trace totals normalize cached OpenAI input while span details preserve pro
 
   expect(trace.totals).toEqual({ input: 100, output: 12, cacheRead: 50, cacheCreation: 0 })
   expect(span.usage).toEqual({ input: 150, output: 12, cacheRead: 50, cacheCreation: null })
+  expect(span.costQuote).toBeNull()
+})
+
+test('stored cost quotes survive row parsing and older rows remain readable', () => {
+  const quote = quoteCost({ provider: 'google', model: 'gemini-2.5-flash', serviceTier: 'standard', usage: { input: 10, output: 5, cacheRead: 0, cacheCreation: 0 } })
+  const row = {
+    id: 2, trace_id: null, provider: 'google', path: '/v1beta', method: 'POST', model: 'gemini-2.5-flash',
+    started_at: 1, ended_at: 2, duration_ms: 1, status: 200, is_stream: false,
+    input_tokens: 10, output_tokens: 5, cache_read_tokens: 0, cache_creation_tokens: 0,
+    request_body: null, response_body: null, cost_quote: quote,
+  }
+  expect(SpanRow.parse(row).costQuote).toEqual(quote)
+  expect(SpanRow.parse({ ...row, cost_quote: undefined }).costQuote).toBeNull()
 })
 
 test('mixed-provider trace rows use the projected per-span fresh input total', () => {

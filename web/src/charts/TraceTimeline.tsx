@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { TimelineStep } from '@contracts/api'
 import { isFailedStatus } from '@shared/httpStatus'
-import { fmtCost, fmtDuration, fmtTokens } from '@shared/format'
+import { costLabel } from '@web/components/costLabel'
+import { fmtDuration, fmtTokens } from '@shared/format'
 import { ChartTooltip } from './ChartTooltip'
 import { linearScale, ticks } from './scale'
 import { useElementWidth } from './useElementWidth'
@@ -124,7 +125,7 @@ function StepDetails({ step, startedAt }: { step: TimelineStep; startedAt: numbe
       <p className="font-medium">{step.model ?? step.provider}</p>
       <p className="text-xs text-ink-faint">{offset}, took {fmtDuration(step.durationMs)}, status {step.status}</p>
       <p className="tabular text-xs">in {fmtTokens(step.usage.input)}, cache {fmtTokens(step.usage.cacheRead)}, out {fmtTokens(step.usage.output)}</p>
-      <p className="text-xs text-ink-soft">{step.costUsd > 0 ? fmtCost(step.costUsd) : 'Price unknown'}. Click to inspect.</p>
+      <p className="text-xs text-ink-soft">{costLabel(step.costUsd, step.costStatus)}. Click to inspect.</p>
     </div>
   )
 }

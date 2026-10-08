@@ -13,9 +13,9 @@ export function cacheHitRate(input: number, cacheRead: number, cacheCreation = 0
   return Math.min(PERCENT, Math.max(0, Math.round((cacheRead / totalInput) * PERCENT)))
 }
 
-export function freshInputTokens(provider: string, reportedInput: number, cacheRead: number): number {
+export function freshInputTokens(provider: string, reportedInput: number, cacheRead: number, cacheCreation = 0): number {
   return provider === 'openai' || provider === 'google' || provider === 'chatgpt'
-    ? Math.max(0, reportedInput - cacheRead)
+    ? Math.max(0, reportedInput - cacheRead - (provider === 'openai' || provider === 'chatgpt' ? cacheCreation : 0))
     : reportedInput
 }
 

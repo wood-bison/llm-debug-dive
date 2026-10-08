@@ -22,6 +22,7 @@ const AnthropicUsage = wireObject({
   output_tokens: optNumber,
   cache_read_input_tokens: optNumber,
   cache_creation_input_tokens: optNumber,
+  cache_creation: lenient(wireObject({ ephemeral_5m_input_tokens: optNumber, ephemeral_1h_input_tokens: optNumber })),
 })
 type AnthropicUsage = z.output<typeof AnthropicUsage>
 

@@ -109,16 +109,17 @@ export class PostgresTelemetryRepository
 
   async insertSpan(s: NewSpan): Promise<number> {
     const { input, output, cacheRead, cacheCreation } = s.usage
+    const costQuote = s.costQuote ?? null
     const inserted = await this.one(IdRow, this.sql`
       INSERT INTO spans (
         trace_id, provider, path, method, model, started_at, ended_at, duration_ms, status,
         is_stream, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-        request_body, response_body
+        request_body, response_body, cost_quote
       ) VALUES (
         ${s.traceId}, ${s.provider}, ${s.path}, ${s.method}, ${s.model}, ${s.startedAt},
         ${s.endedAt}, ${s.durationMs}, ${s.status}, ${s.isStream},
         ${input}, ${output}, ${cacheRead}, ${cacheCreation},
-        ${s.requestBody}, ${s.responseBody}
+        ${s.requestBody}, ${s.responseBody}, ${costQuote}::jsonb
       )
       RETURNING id
     `)
@@ -168,7 +169,11 @@ export class PostgresTelemetryRepository
   async stats(f: QueryFilters): Promise<StatsTotals> {
     const row = await this.one(StatsRow, this.sql`
       SELECT count(*)::int as spans,
-             sum(CASE WHEN provider IN ('openai', 'google', 'chatgpt') THEN GREATEST(input_tokens - COALESCE(cache_read_tokens, 0), 0) ELSE input_tokens END) as in_t,
+             sum(CASE
+               WHEN provider IN ('openai', 'chatgpt') THEN GREATEST(input_tokens - COALESCE(cache_read_tokens, 0) - COALESCE(cache_creation_tokens, 0), 0)
+               WHEN provider = 'google' THEN GREATEST(input_tokens - COALESCE(cache_read_tokens, 0), 0)
+               ELSE input_tokens
+             END) as in_t,
              sum(output_tokens) as out_t, sum(cache_read_tokens) as cache_t,
              sum(cache_creation_tokens) as cache_create_t,
              avg(duration_ms) as avg_ms
@@ -232,7 +237,9 @@ export class PostgresTelemetryRepository
   private freshInputProjection() {
     return this.sql`
       (SELECT COALESCE(sum(CASE
-        WHEN s.provider IN ('openai', 'google', 'chatgpt')
+        WHEN s.provider IN ('openai', 'chatgpt')
+          THEN GREATEST(COALESCE(s.input_tokens, 0) - COALESCE(s.cache_read_tokens, 0) - COALESCE(s.cache_creation_tokens, 0), 0)
+        WHEN s.provider = 'google'
           THEN GREATEST(COALESCE(s.input_tokens, 0) - COALESCE(s.cache_read_tokens, 0), 0)
         ELSE COALESCE(s.input_tokens, 0)
       END), 0) FROM spans s WHERE s.trace_id = t.id) AS fresh_input_tokens
@@ -273,6 +280,28 @@ export class PostgresTelemetryRepository
       traceId,
       spans.map((r) => ({ model: r.model, tokens: totalsOf(usageFrom(r)) })),
     ]))
+  }
+
+  async costSpansByTraceIds(traceIds: number[]): Promise<Span[]> {
+    const ids = safeIdList(traceIds)
+    if (!ids) return []
+    return this.all(SpanRow, this.sql.unsafe(`
+      SELECT id, trace_id, provider, path, method, model, started_at, ended_at, duration_ms, status, is_stream,
+             input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+             CASE WHEN cost_quote IS NOT NULL THEN NULL ELSE request_body END AS request_body,
+             CASE WHEN cost_quote IS NOT NULL THEN NULL ELSE response_body END AS response_body, cost_quote
+      FROM spans WHERE trace_id IN (${ids}) ORDER BY started_at ASC, id ASC
+    `))
+  }
+
+  async costSpans(f: QueryFilters): Promise<Span[]> {
+    return this.all(SpanRow, this.sql`
+      SELECT id, trace_id, provider, path, method, model, started_at, ended_at, duration_ms, status, is_stream,
+             input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+             CASE WHEN cost_quote IS NOT NULL THEN NULL ELSE request_body END AS request_body,
+             CASE WHEN cost_quote IS NOT NULL THEN NULL ELSE response_body END AS response_body, cost_quote
+      FROM spans WHERE started_at > ${f.since} ${this.providerFilter(f)} ORDER BY started_at ASC, id ASC
+    `)
   }
 
   async countTracesBefore(f: QueryFilters): Promise<number> {

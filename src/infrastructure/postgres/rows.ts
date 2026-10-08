@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { StoredCostQuote } from './costQuoteSchema'
 import type { Span, ToolEvent, ToolInvocation, Trace, TraceReview, Usage } from '../../domain/telemetry'
 
 export const int = z.coerce.number()
@@ -49,6 +50,7 @@ export const SpanRow = z.object({
   ...UsageColumns,
   request_body: nullableText,
   response_body: nullableText,
+  cost_quote: StoredCostQuote.nullable().optional(),
 }).transform((r): Span => ({
   id: r.id,
   traceId: r.trace_id,
@@ -64,6 +66,7 @@ export const SpanRow = z.object({
   usage: usageFrom(r),
   requestBody: r.request_body,
   responseBody: r.response_body,
+  costQuote: r.cost_quote ?? null,
 }))
 
 export const TraceColumns = {

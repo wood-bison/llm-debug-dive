@@ -25,6 +25,8 @@ const GoogleUsage = wireObject({
   prompt_token_count: optNumber,
   candidatesTokenCount: optNumber,
   candidates_token_count: optNumber,
+  thoughtsTokenCount: optNumber,
+  thoughts_token_count: optNumber,
   cachedContentTokenCount: optNumber,
   cached_content_token_count: optNumber,
 })
@@ -106,7 +108,9 @@ function usageOf(payload: unknown): Usage {
   const u = parseAs(GoogleUsage, envelope?.usageMetadata ?? envelope?.usage_metadata ?? payload)
   return {
     input: u?.promptTokenCount ?? u?.prompt_token_count ?? null,
-    output: u?.candidatesTokenCount ?? u?.candidates_token_count ?? null,
+    output: (u?.candidatesTokenCount ?? u?.candidates_token_count) == null
+      ? null
+      : (u?.candidatesTokenCount ?? u?.candidates_token_count ?? 0) + (u?.thoughtsTokenCount ?? u?.thoughts_token_count ?? 0),
     cacheRead: u?.cachedContentTokenCount ?? u?.cached_content_token_count ?? null,
     cacheCreation: null,
   }

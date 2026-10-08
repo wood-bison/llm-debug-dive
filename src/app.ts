@@ -15,6 +15,7 @@ import { extractCodexTelemetryTools } from './infrastructure/codex/telemetryEven
 import { createOllamaReviewer } from './infrastructure/ollama/ollamaReviewer'
 import type { Sql } from './infrastructure/postgres/client'
 import { PostgresTelemetryRepository } from './infrastructure/postgres/telemetryRepository'
+import { estimateSpanCost } from './infrastructure/providers/costInputs'
 import { createProviderRegistry } from './infrastructure/providers/registry'
 import { parseTurnRequest } from './infrastructure/providers/turnRequest'
 import { createProxyRoutes, type FetchUpstream } from './presentation/http/proxyRoutes'
@@ -43,6 +44,7 @@ export function createApp(config: AppConfig, sql: Sql, overrides: AppOverrides =
   const turns = createTurnQueries({ reader: repository, codex, providers, parseTurnRequest })
   const recorder = createExchangeRecorder({
     writer: repository,
+    costEstimator: estimateSpanCost,
     observer: overrides.observer ?? noopObserver,
     logger,
     requestTools: extractCodexTelemetryTools,
@@ -53,11 +55,11 @@ export function createApp(config: AppConfig, sql: Sql, overrides: AppOverrides =
     config,
     logger,
     providers,
-    dashboard: createDashboardQueries({ reader: repository, turns }),
-    traceReplay: createTraceReplayQuery({ reader: repository, reviews: repository, reviewer, turns }),
-    tracePanel: createTracePanelQuery({ reader: repository, turns }),
-    inspectSpan: createSpanInspectionQuery({ reader: repository, providers, codex }),
-    reviewLocally: createLocalReviewCommand({ reader: repository, reviews: repository, reviewer, turns }),
+    dashboard: createDashboardQueries({ reader: repository, turns, costEstimator: estimateSpanCost }),
+    traceReplay: createTraceReplayQuery({ reader: repository, reviews: repository, reviewer, turns, costEstimator: estimateSpanCost }),
+    tracePanel: createTracePanelQuery({ reader: repository, turns, costEstimator: estimateSpanCost }),
+    inspectSpan: createSpanInspectionQuery({ reader: repository, providers, codex, costEstimator: estimateSpanCost }),
+    reviewLocally: createLocalReviewCommand({ reader: repository, reviews: repository, reviewer, turns, costEstimator: estimateSpanCost }),
     admin: repository,
   }))
   app.route('/', createWebAppRoutes(config))

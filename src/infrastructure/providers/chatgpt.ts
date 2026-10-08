@@ -61,7 +61,7 @@ function findUsage(payload: unknown): Usage {
   const usage = emptyUsage()
   visitObjects(payload, (record) => {
     for (const field of Object.keys(USAGE_KEYS) as Array<keyof Usage>) {
-      usage[field] = firstNumber(record, USAGE_KEYS[field]) ?? usage[field]
+      usage[field] = firstNumber(record, USAGE_KEYS[field]) ?? usage[field] ?? null
     }
   })
   return usage

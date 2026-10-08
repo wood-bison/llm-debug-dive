@@ -1,6 +1,7 @@
+import { costLabel } from '@web/components/costLabel'
 import { Link } from 'react-router'
 import type { TurnRow } from '@contracts/api'
-import { fmtCost, fmtDuration, fmtTokens, timeAgo, truncate } from '@shared/format'
+import { fmtDuration, fmtTokens, timeAgo, truncate } from '@shared/format'
 import { ToneMark } from '@web/components/StatusLabel'
 
 const PROMPT_CHARS = 110
@@ -38,7 +39,7 @@ export function RunRow({ turn, providerLabel }: { turn: TurnRow; providerLabel: 
         {hiddenTools > 0 && <span className="text-ink-faint">, +{hiddenTools}</span>}
       </td>
       <td className="tabular whitespace-nowrap px-3 py-3 text-right text-sm">{fmtDuration(turn.durationMs)}</td>
-      <td className="tabular py-3 pl-3 pr-5 text-right text-sm font-medium">{turn.costUsd > 0 ? fmtCost(turn.costUsd) : 'Unknown'}</td>
+      <td className="tabular py-3 pl-3 pr-5 text-right text-sm font-medium">{costLabel(turn.costUsd, turn.costCoverage.status)}</td>
     </tr>
   )
 }

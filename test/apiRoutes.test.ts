@@ -6,6 +6,7 @@ import type { SpanInspection } from '../src/application/trace/spanInspection'
 import type { TracePanel } from '../src/application/trace/tracePanel'
 import type { TraceReplay } from '../src/application/trace/traceReplay'
 import type { AppConfig } from '../src/application/config'
+import { quoteCost } from '../src/domain/pricing'
 import { createApp } from '../src/app'
 import { createProviderRegistry } from '../src/infrastructure/providers/registry'
 import type { Sql } from '../src/infrastructure/postgres/client'
@@ -107,12 +108,13 @@ test('span DTO labels fresh input accurately and retains provider-reported usage
     },
     trace: undefined,
     cost: 0,
+    costQuote: quoteCost({ provider: 'openai', model: 'gpt-4o-mini', usage: { input: 150, output: 12, cacheRead: 50, cacheCreation: 0 }, serviceTier: 'standard' }),
     conversation: { messages: [], systemChars: 0, hasRawText: false },
     hit: 33,
     localTurn: null,
     tools: [],
     codexTurn: null,
-  } as SpanInspection)
+  } satisfies SpanInspection)
 
   expect(detail.usage.input).toBe(100)
   expect(detail.reportedUsage.input).toBe(150)

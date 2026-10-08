@@ -7,6 +7,7 @@ import { Skeleton } from '@web/components/Skeleton'
 import { NotFoundState } from '@web/components/NotFoundState'
 import { ApiRequestError } from '@web/api/client'
 import { SpanDrawer } from '@web/features/span/SpanDrawer'
+import { CostExplorerPanel } from '@web/features/cost/CostExplorerPanel'
 import { AnswerPanel } from './AnswerPanel'
 import { CoachPanel } from './CoachPanel'
 import { InsightsPanel } from './InsightsPanel'
@@ -64,6 +65,7 @@ function TraceView({ meta }: { meta: Meta }) {
     <div className="grid gap-6 [&>*]:min-w-0">
       <TraceHeader trace={data} providerLabel={providerLabel} />
       <TraceVitals trace={data} contextWindowTokens={meta.contextWindowTokens} />
+      <CostExplorerPanel cost={data.cost} traceId={data.id} onSelectSpan={openSpan} />
       <TimelinePanel trace={data} onSelectSpan={openSpan} />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px] [&>*]:min-w-0">
         <CoachPanel trace={data} meta={meta} />

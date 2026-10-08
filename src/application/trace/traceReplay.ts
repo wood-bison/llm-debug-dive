@@ -1,12 +1,12 @@
 import type { CodexLocalTool } from '../../domain/codex'
 import { cacheHitRate, highestStatus, tokenLoad } from '../../domain/metrics'
-import { costOf, spanCost } from '../../domain/pricing'
+import { costOf } from '../../domain/pricing'
 import type { PromptCoachResult } from '../../domain/promptCoach'
 import { repeatedTools, summarizeSkills, type RepeatedTool, type SkillSummary } from '../../domain/skills'
 import type { Span, ToolEvent, Trace, TraceReview, Turn } from '../../domain/telemetry'
 import { buildVerdict, type Verdict } from '../../domain/verdict'
 import { sumBy } from '../../shared/collections'
-import type { LocalReviewer, ReviewStore, TelemetryReader, ToolCount } from '../ports'
+import type { LocalReviewer, ReviewStore, SpanCostEstimator, TelemetryReader, ToolCount } from '../ports'
 import type { TurnQueries } from '../turns'
 import { DAY_MS, PROMPT_NOT_CAPTURED, coachFor, synthesizeToolEvents, toReplayTool, traceDurationMs } from './shared'
 
@@ -39,11 +39,12 @@ export interface TraceReplayDeps {
   reviews: ReviewStore
   reviewer: LocalReviewer
   turns: TurnQueries
+  costEstimator: SpanCostEstimator
   now?: () => number
 }
 
 export function createTraceReplayQuery(deps: TraceReplayDeps) {
-  const { reader, reviews, reviewer, turns } = deps
+  const { reader, reviews, reviewer, turns, costEstimator } = deps
   const now = deps.now ?? Date.now
 
   return async function traceReplay(id: number): Promise<TraceReplay | null> {
@@ -63,7 +64,7 @@ export function createTraceReplayQuery(deps: TraceReplayDeps) {
     const localTurn = turns.meaningfulLocalTurn(spans)
     const toolEvents = storedToolEvents.length > 0 ? storedToolEvents : synthesizeToolEvents(localTurn, trace)
     const replayTools = toolEvents.map(toReplayTool)
-    const totalCost = sumBy(spans, spanCost)
+    const totalCost = sumBy(spans, (span) => costEstimator(span).knownUsd)
     const hit = cacheHitRate(trace.totals.input, trace.totals.cacheRead, trace.totals.cacheCreation)
     const lastStatus = highestStatus(spans)
     const listedPrompt = recent.find((turn) => turn.id === trace.id)?.firstPrompt

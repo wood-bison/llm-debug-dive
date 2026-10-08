@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CostCoverage, CostExplorer, CostQuote } from './costs'
 
 const nullableNumber = z.number().nullable()
 
@@ -60,6 +61,7 @@ export const TurnRow = z.object({
   tokenLoad: z.number(),
   cacheHitPct: z.number(),
   costUsd: z.number(),
+  costCoverage: CostCoverage,
   tools: z.array(ToolTally),
   badges: z.array(z.object({ tone: Tone, label: z.string(), title: z.string() })),
 })
@@ -74,6 +76,7 @@ export const Overview = z.object({
     cacheHitPct: z.number(),
     costUsd: z.number(),
     costPerCallUsd: z.number(),
+    costCoverage: CostCoverage,
   }),
   turns: z.array(TurnRow),
   olderTraceCount: z.number(),
@@ -94,6 +97,7 @@ export const TimelineStep = z.discriminatedUnion('kind', [
     isStream: z.boolean(),
     usage: Usage,
     costUsd: z.number(),
+    costStatus: CostQuote.shape.status,
   }),
   z.object({
     kind: z.literal('tool'),
@@ -138,6 +142,7 @@ export const TraceDetail = z.object({
   tokenLoad: z.number(),
   cacheHitPct: z.number(),
   costUsd: z.number(),
+  cost: CostExplorer,
   contextPeakTokens: z.number(),
   outputTokensPerSecond: z.number(),
   models: z.array(z.string()),
@@ -173,6 +178,7 @@ export const SpanDetail = z.object({
   isStream: z.boolean(),
   usage: Usage,
   reportedUsage: Usage,
+  costQuote: CostQuote,
   costUsd: z.number(),
   cacheHitPct: z.number(),
   messages: z.array(z.object({

@@ -1,3 +1,4 @@
+import { costLabel } from '@web/components/costLabel'
 import type { Overview } from '@contracts/api'
 import { totalTokens } from '@web/charts/tokenSeries'
 import { fmtCost, fmtCount, fmtDuration, fmtTokens } from '@shared/format'
@@ -9,11 +10,14 @@ interface ReadoutItem {
 }
 
 function readoutItems({ stats, turns }: Overview): ReadoutItem[] {
+  const incompleteEstimateLabel = stats.costCoverage.incompleteCalls === 1
+    ? '1 call has an incomplete estimate'
+    : `${stats.costCoverage.incompleteCalls} calls have incomplete estimates`
   return [
     { label: 'Model calls', value: fmtCount(stats.calls), detail: `${fmtCount(turns.length)} recent runs shown` },
     { label: 'Tokens moved', value: fmtTokens(totalTokens(stats.tokens)), detail: `${fmtTokens(stats.tokens.output)} generated` },
     { label: 'Cache hit', value: `${stats.cacheHitPct}%`, detail: `${fmtTokens(stats.tokens.cacheRead)} reused from cache` },
-    { label: 'Estimated cost', value: stats.costUsd > 0 ? fmtCost(stats.costUsd) : 'Unknown', detail: stats.costUsd > 0 ? `${fmtCost(stats.costPerCallUsd)} per model call` : 'No price for these models' },
+    { label: 'Estimated cost', value: costLabel(stats.costUsd, stats.costCoverage.status), detail: stats.costCoverage.status === 'complete' ? `${fmtCost(stats.costPerCallUsd)} per model call` : incompleteEstimateLabel },
     { label: 'Typical latency', value: stats.avgLatencyMs ? fmtDuration(Math.round(stats.avgLatencyMs)) : 'None', detail: 'per model call' },
   ]
 }

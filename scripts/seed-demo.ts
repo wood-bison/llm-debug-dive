@@ -1,5 +1,6 @@
 import { loadConfig } from '../src/config'
-import type { ProviderName, ToolInvocation } from '../src/domain/telemetry'
+import { estimateSpanCost } from '../src/infrastructure/providers/costInputs'
+import type { NewSpan, ProviderName, ToolInvocation } from '../src/domain/telemetry'
 import { connectDatabase } from '../src/infrastructure/postgres/client'
 import { PostgresTelemetryRepository } from '../src/infrastructure/postgres/telemetryRepository'
 import { HTTP_STATUS } from '../src/shared/httpStatus'
@@ -29,7 +30,7 @@ const demos: DemoTrace[] = [
   {
     id: 'demo:research-loop',
     provider: 'openai',
-    model: 'gpt-4o-mini',
+    model: 'gpt-6.1-sol',
     prompt: 'Find why the dashboard is slow. Search the whole repo and explain what to improve.',
     answer: 'The agent searched broadly and found several possible paths, but did not verify with a targeted test.',
     input: 164_000,
@@ -83,7 +84,7 @@ const demos: DemoTrace[] = [
   {
     id: 'demo:edit-without-verify',
     provider: 'openai',
-    model: 'gpt-4o-mini',
+    model: 'gpt-6.1-sol',
     prompt: 'Fix the CSS overflow in the trace table.',
     answer: 'The agent edited CSS but did not run a browser or typecheck verification.',
     input: 54_000,
@@ -95,6 +96,30 @@ const demos: DemoTrace[] = [
       tool('apply_patch', 'apply_patch web/src/features/dashboard/RunsTable.tsx', 'Code edits'),
     ],
   },
+  ...[0, 1, 2].map((step): DemoTrace => ({
+    id: 'demo:cost-explorer',
+    provider: 'openai',
+    model: 'gpt-6.1-sol',
+    prompt: ['Inspect the targeted module.', 'Apply the small refactor using the cached context.', 'Verify the updated module.'][step] ?? '',
+    answer: ['Module inspected.', 'Refactor applied.', 'Verification recorded.'][step] ?? '',
+    input: 20_000,
+    output: 2_000,
+    cacheRead: step === 0 ? 0 : 80_000,
+    cacheCreation: step === 0 ? 80_000 : 0,
+    durationMs: 12_000,
+    tools: [tool(step === 2 ? 'bun' : 'rg', step === 2 ? 'bun run typecheck' : 'rg -n "cost" src/domain', step === 2 ? 'Checks' : 'Read & search')],
+  })),
+  {
+    id: 'demo:unknown-tariff',
+    provider: 'openai',
+    model: 'custom-local-model',
+    prompt: 'Inspect a call whose tariff is outside the pricing catalog.',
+    answer: 'Usage is available, but a verified tariff is not.',
+    input: 2_000,
+    output: 500,
+    cacheRead: 0,
+    durationMs: 3_000,
+  },
 ]
 
 try {
@@ -105,7 +130,7 @@ try {
     const traceId = await repository.getOrCreateTrace(demo.id, demo.provider, started)
     const requestBody = requestFor(demo)
     const responseBody = responseFor(demo)
-    const spanId = await repository.insertSpan({
+    const span: NewSpan = {
       traceId,
       provider: demo.provider,
       path: '/demo/agent-run',
@@ -119,12 +144,13 @@ try {
       usage: { input: reportedInput(demo), output: demo.output, cacheRead: demo.cacheRead, cacheCreation: demo.cacheCreation ?? 0 },
       requestBody,
       responseBody,
-    })
+    }
+    const spanId = await repository.insertSpan({ ...span, costQuote: estimateSpanCost(span) })
     if (demo.tools?.length) {
       await repository.insertToolInvocations(spanId, traceId, started + demo.durationMs, demo.tools)
     }
   }
-  console.log(`Seeded ${demos.length} demo traces. Open http://${config.hostname}:${config.port}/dashboard?range=1h`)
+  console.log(`Seeded ${new Set(demos.map((demo) => demo.id)).size} demo traces. Open http://${config.hostname}:${config.port}/dashboard?range=1h`)
 } finally {
   await sql.close()
 }
@@ -160,16 +186,18 @@ function responseFor(demo: DemoTrace): string {
       })
     default:
       return JSON.stringify({
+        model: demo.model,
+        service_tier: 'default',
         choices: [{ message: { role: 'assistant', content: demo.answer } }],
         usage: {
           prompt_tokens: input,
           completion_tokens: demo.output,
-          prompt_tokens_details: { cached_tokens: demo.cacheRead },
+          prompt_tokens_details: { cached_tokens: demo.cacheRead, cache_write_tokens: demo.cacheCreation ?? 0 },
         },
       })
   }
 }
 
 function reportedInput(demo: DemoTrace): number {
-  return demo.provider === 'anthropic' ? demo.input : demo.input + demo.cacheRead
+  return demo.provider === 'anthropic' ? demo.input : demo.input + demo.cacheRead + (demo.cacheCreation ?? 0)
 }

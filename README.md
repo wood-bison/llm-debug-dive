@@ -13,6 +13,12 @@ bun run start
 
 Open [the dashboard](http://127.0.0.1:8787/dashboard). Select a run, follow its timeline, then open a model call to inspect the conversation and raw payloads. The in-app guide explains the metrics.
 
+## Cost Explorer
+
+Open a run to see token costs by category and inspect each call’s rates, source and verification date. Compare the token estimate with a without-cache scenario, or set an optional run budget to find the first call that reaches it. Budgets are saved in your browser and do not block agent requests.
+
+New calls retain the pricing estimate captured with them. Older calls are explicitly repriced using the current catalog. Missing usage, unknown models and unsupported tariffs produce partial or unknown estimates. These are token estimates, not invoices; paid tools, cache storage, taxes and subscription billing are excluded.
+
 ## Preview
 
 Sample data from a disposable local database:
@@ -20,6 +26,8 @@ Sample data from a disposable local database:
 ![Runs dashboard with token load and cache usage](docs/images/dashboard.jpg)
 
 ![Run detail with token composition and a model/tool timeline](docs/images/trace.jpg)
+
+![Cost Explorer with token rates, cache savings and a run budget](docs/images/cost-explorer.jpg)
 
 To create sample runs, execute `bun run demo:seed`. It replaces only traces whose external ID starts with `demo:`. Use a development database.
 
@@ -67,4 +75,4 @@ Keep the app local: captured prompts and tool output may contain private data. T
 
 `src/domain` holds pure analysis rules. `src/application` defines use cases and typed ports. `src/infrastructure` implements storage and provider adapters. `src/presentation` exposes HTTP and CLI interfaces. `src/contracts` validates the shared API; `web/src` contains React features and semantic Tailwind tokens. `src/app.ts` composes the dependencies.
 
-Decisions live in [docs/adr](docs/adr): [dependency boundaries](docs/adr/0001-dependency-boundaries.md), [React and API contracts](docs/adr/0002-react-dashboard.md), [visual tokens](docs/adr/0003-visual-system.md).
+Decisions live in [docs/adr](docs/adr): [dependency boundaries](docs/adr/0001-dependency-boundaries.md), [React and API contracts](docs/adr/0002-react-dashboard.md), [visual tokens](docs/adr/0003-visual-system.md), [cost estimates](docs/adr/0004-cost-estimates.md), [Postgres execution](docs/adr/0005-postgres-query-execution.md).

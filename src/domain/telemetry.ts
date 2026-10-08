@@ -1,3 +1,5 @@
+import type { CostQuote } from './costs'
+
 export type ProviderName = 'anthropic' | 'openai' | 'chatgpt' | 'google'
 
 export interface Usage {
@@ -51,6 +53,7 @@ export interface NewSpan {
   usage: Usage
   requestBody: string | null
   responseBody: string | null
+  costQuote?: CostQuote | null
 }
 
 export interface Span extends NewSpan {

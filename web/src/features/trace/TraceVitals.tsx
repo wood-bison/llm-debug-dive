@@ -1,5 +1,6 @@
+import { costLabel } from '@web/components/costLabel'
 import type { TraceDetail } from '@contracts/api'
-import { fmtCost, fmtDuration, fmtTokens } from '@shared/format'
+import { fmtDuration, fmtTokens } from '@shared/format'
 import { TokenBreakdown } from '@web/charts/TokenBreakdown'
 
 const PERCENT = 100
@@ -7,7 +8,7 @@ const PERCENT = 100
 export function TraceVitals({ trace, contextWindowTokens }: { trace: TraceDetail; contextWindowTokens: number }) {
   const contextPct = Math.round((trace.contextPeakTokens / contextWindowTokens) * PERCENT)
   const vitals = [
-    { label: 'Estimated cost', value: trace.costUsd > 0 ? fmtCost(trace.costUsd) : 'Unknown' },
+    { label: 'Estimated cost', value: costLabel(trace.costUsd, trace.cost.status) },
     { label: 'Duration', value: fmtDuration(trace.durationMs) },
     { label: 'Model calls', value: String(trace.calls) },
     { label: 'Cache hit', value: `${trace.cacheHitPct}%` },

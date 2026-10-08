@@ -39,6 +39,7 @@ export async function migrate(sql: Sql): Promise<void> {
       response_body TEXT
     )
   `
+  await sql`ALTER TABLE spans ADD COLUMN IF NOT EXISTS cost_quote JSONB`
   await sql`CREATE INDEX IF NOT EXISTS idx_spans_started_at ON spans(started_at DESC)`
   await sql`CREATE INDEX IF NOT EXISTS idx_spans_trace_id ON spans(trace_id)`
 

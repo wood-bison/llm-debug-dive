@@ -1,5 +1,7 @@
+import { costLabel } from '@web/components/costLabel'
 import type { SpanDetail } from '@contracts/api'
-import { fmtCost, fmtDuration, fmtTokens } from '@shared/format'
+import { fmtDuration, fmtTokens } from '@shared/format'
+import { QuoteDetails } from '@web/features/cost/CostCallLedger'
 import { CodexTurnFacts } from './CodexTurnFacts'
 import { MessageList } from './MessageList'
 import { RawBody } from './RawBody'
@@ -9,7 +11,7 @@ export function SpanContent({ span }: { span: SpanDetail }) {
     ['Model', span.model ?? 'Unknown'],
     ['Status', String(span.status)],
     ['Duration', fmtDuration(span.durationMs)],
-    ['Cost', span.costUsd > 0 ? fmtCost(span.costUsd) : 'Unknown'],
+    ['Cost', costLabel(span.costUsd, span.costQuote.status)],
     ['Fresh input', fmtTokens(span.usage.input)],
     ['Cache reads', `${fmtTokens(span.usage.cacheRead)} (${span.cacheHitPct}%)`],
     ['Output', fmtTokens(span.usage.output)],
@@ -27,6 +29,10 @@ export function SpanContent({ span }: { span: SpanDetail }) {
           </div>
         ))}
       </dl>
+      <details className="rounded-lg border border-line">
+        <summary className="cursor-pointer px-3 py-3 text-sm font-medium">Cost calculation and tariff</summary>
+        <QuoteDetails quote={span.costQuote} />
+      </details>
       {span.codexTurn && <CodexTurnFacts turn={span.codexTurn} />}
       <MessageList messages={span.messages} />
       {span.tools.length > 0 && (

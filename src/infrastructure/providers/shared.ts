@@ -187,7 +187,7 @@ export type UsageUpdate = Partial<Record<keyof Usage, number | null | undefined>
 
 export function mergeUsage(usage: Usage, next: UsageUpdate): void {
   for (const field of Object.keys(next) as Array<keyof Usage>) {
-    usage[field] = next[field] ?? usage[field]
+    usage[field] = next[field] ?? usage[field] ?? null
   }
 }
 
@@ -201,4 +201,3 @@ export function visitObjects(value: unknown, visit: (o: JsonRecord) => void, dep
   visit(record)
   for (const child of Object.values(record)) visitObjects(child, visit, depth + 1)
 }
-

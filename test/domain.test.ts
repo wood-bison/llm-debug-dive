@@ -19,6 +19,7 @@ describe('metrics', () => {
     expect(freshInputTokens('openai', 150, 50)).toBe(100)
     expect(freshInputTokens('google', 150, 50)).toBe(100)
     expect(freshInputTokens('chatgpt', 150, 50)).toBe(100)
+    expect(freshInputTokens('chatgpt', 150, 50, 20)).toBe(80)
     expect(freshInputTokens('anthropic', 100, 50)).toBe(100)
     expect(cacheHitShare({ input: 100, cacheRead: 50, cacheCreation: 50 })).toBe(25)
     expect(tokenLoad({ input: 100, output: 10, cacheRead: 20, cacheCreation: 5 })).toBe(135)
@@ -40,13 +41,14 @@ describe('metrics', () => {
 
 describe('pricing', () => {
   test('anthropic input is fresh-only; openai input includes cache', () => {
-    const tokens = { input: 1_000_000, output: 0, cacheRead: 1_000_000, cacheCreation: 0 }
-    expect(costOf('claude-sonnet-4-6', tokens)).toBeCloseTo(3 + 0.3)
-    expect(costOf('gpt-4o', tokens)).toBeCloseTo(1.25)
+    const tokens = { input: 100_000, output: 0, cacheRead: 100_000, cacheCreation: 0 }
+    expect(costOf('claude-sonnet-4-6', tokens)).toBeCloseTo(0.3 + 0.03)
+    expect(costOf('gpt-6.1-sol', tokens)).toBeCloseTo(0.01)
   })
 
-  test('dated model ids fall back to the longest known prefix; unknown models cost 0', () => {
-    expect(costOf('gpt-4o-mini-2024-07-18', { input: 1_000_000, output: 0, cacheRead: 0, cacheCreation: 0 })).toBeCloseTo(0.15)
+  test('exact verified dated model ids are supported; unverified suffixes cost 0', () => {
+    expect(costOf('claude-haiku-4-5-20251001', { input: 1_000_000, output: 0, cacheRead: 0, cacheCreation: 0 })).toBeCloseTo(1)
+    expect(costOf('gpt-4o-mini-2024-07-18', { input: 1_000_000, output: 0, cacheRead: 0, cacheCreation: 0 })).toBe(0)
     expect(costOf('mystery', { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheCreation: 0 })).toBe(0)
     expect(costOf('constructor', { input: 1, output: 1, cacheRead: 0, cacheCreation: 0 })).toBe(0)
     expect(spanCost({ model: null, usage: { input: 5, output: 5, cacheRead: null, cacheCreation: null } })).toBe(0)

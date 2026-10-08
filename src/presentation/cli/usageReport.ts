@@ -1,6 +1,6 @@
-import type { ProviderModelUsage } from '../../application/ports'
+import type { ProviderModelUsage, SpanCostEstimator } from '../../application/ports'
 import { isFailure } from '../../domain/metrics'
-import { costOf, spanCost } from '../../domain/pricing'
+import type { CostSummary } from '../../domain/costs'
 import { totalsOf, type Span } from '../../domain/telemetry'
 import { sumBy } from '../../shared/collections'
 
@@ -58,8 +58,12 @@ const usd = (amount: number) => `$${amount.toFixed(COST_DECIMALS)}`
 const shortModel = (model: string) => (model.length > MODEL_CHARS ? `${model.slice(0, MODEL_CHARS - 1)}…` : model)
 const rule = () => style.dim('─'.repeat(RULE_WIDTH))
 
-export function renderSummary(rows: ProviderModelUsage[], totals: { traces: number; spans: number }, last: string): string {
-  const cost = (r: ProviderModelUsage) => costOf(r.model, r.usage)
+export const modelCostKey = (provider: string, model: string | null) => JSON.stringify([provider, model])
+
+export function renderSummary(rows: ProviderModelUsage[], totals: { traces: number; spans: number }, last: string, costs: ReadonlyMap<string, CostSummary>): string {
+  const summary = (r: ProviderModelUsage) => costs.get(modelCostKey(r.provider, r.model))
+  const cost = (r: ProviderModelUsage) => summary(r)?.knownUsd ?? 0
+  const costLabel = (r: ProviderModelUsage) => summary(r)?.status === 'complete' ? usd(cost(r)) : cost(r) > 0 ? `${usd(cost(r))} + ?` : '?'
   const sum = (pick: (r: ProviderModelUsage) => number) => sumBy(rows, pick)
   const totalCost = sum(cost)
 
@@ -75,7 +79,7 @@ export function renderSummary(rows: ProviderModelUsage[], totals: { traces: numb
       String(r.usage.output ?? '-'),
       String(r.usage.cacheRead ?? '-'),
       String(Math.round(r.avgMs ?? 0)),
-      style.brown(cost(r) > 0 ? usd(cost(r)) : '?'),
+      style.brown(costLabel(r)),
     ])),
     rule(),
     tableRow([
@@ -86,7 +90,7 @@ export function renderSummary(rows: ProviderModelUsage[], totals: { traces: numb
       style.bold(String(sum((r) => totalsOf(r.usage).output))),
       style.bold(String(sum((r) => totalsOf(r.usage).cacheRead))),
       '',
-      style.green(rows.length > 0 && rows.some((r) => cost(r) === 0) ? `${totalCost > 0 ? usd(totalCost) + ' + ' : ''}?` : usd(totalCost)),
+      style.green(rows.length > 0 && rows.some((r) => summary(r)?.status !== 'complete') ? `${totalCost > 0 ? usd(totalCost) + ' + ' : ''}?` : usd(totalCost)),
     ]),
     '',
     style.dim(`traces: ${totals.traces}, spans: ${totals.spans}`),
@@ -94,12 +98,13 @@ export function renderSummary(rows: ProviderModelUsage[], totals: { traces: numb
   ].join('\n')
 }
 
-export function renderRecentSpans(spans: Span[], last: string): string {
-  return [`\n── ${style.bold('recent spans')} ── last ${last}\n`, ...spans.map(spanLine), ''].join('\n')
+export function renderRecentSpans(spans: Span[], last: string, estimate: SpanCostEstimator): string {
+  return [`\n── ${style.bold('recent spans')} ── last ${last}\n`, ...spans.map((span) => spanLine(span, estimate)), ''].join('\n')
 }
 
-function spanLine(span: Span): string {
-  const cost = spanCost(span)
+function spanLine(span: Span, estimate: SpanCostEstimator): string {
+  const quote = estimate(span)
+  const cost = quote.knownUsd
   const status = (isFailure(span.status) ? style.red : style.green)(String(span.status))
   return [
     style.dim(`#${String(span.id).padStart(SPAN_LINE.id)}`) + '  ',
@@ -111,6 +116,6 @@ function spanLine(span: Span): string {
     fit(`in=${span.usage.input ?? '-'}`, SPAN_LINE.tokens, 'right') + ' ',
     fit(`out=${span.usage.output ?? '-'}`, SPAN_LINE.tokens, 'right') + ' ',
     style.dim(span.isStream ? 'stream' : 'json  ') + '  ',
-    style.brown(cost > 0 ? usd(cost) : ''),
+    style.brown(quote.status === 'complete' ? usd(cost) : cost > 0 ? `${usd(cost)} + ?` : '?'),
   ].join('')
 }

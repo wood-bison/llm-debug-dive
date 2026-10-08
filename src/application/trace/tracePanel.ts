@@ -1,12 +1,12 @@
 import type { CodexLocalTurn } from '../../domain/codex'
 import { nextCheaperRunTips, traceInsights, type Insight } from '../../domain/insights'
 import { cacheHitShare, freshInputTokens, worstFailureOrOk, median, percentOf, tokenLoad } from '../../domain/metrics'
-import { spanCost } from '../../domain/pricing'
+import { costExplorerFor, type CostExplorer } from './costExplorer'
 import type { Span, Trace, Turn } from '../../domain/telemetry'
 import { CONTEXT_WINDOW_TOKENS } from '../../domain/thresholds'
 import { buildVerdict, type BaselineMetrics, type Verdict } from '../../domain/verdict'
 import { sumBy, unique } from '../../shared/collections'
-import type { TelemetryReader } from '../ports'
+import type { SpanCostEstimator, TelemetryReader } from '../ports'
 import { expandToolCounts, type TurnQueries } from '../turns'
 import { DAY_MS } from './shared'
 
@@ -24,6 +24,7 @@ export interface TracePanel {
   spans: PricedSpan[]
   localTurn: CodexLocalTurn | undefined
   totalCost: number
+  cost: CostExplorer
   tokenLoad: number
   hit: number
   durationMs: number
@@ -37,8 +38,8 @@ export interface TracePanel {
   tips: string[]
 }
 
-export function createTracePanelQuery(deps: { reader: TelemetryReader; turns: TurnQueries }) {
-  const { reader, turns } = deps
+export function createTracePanelQuery(deps: { reader: TelemetryReader; turns: TurnQueries; costEstimator: SpanCostEstimator }) {
+  const { reader, turns, costEstimator } = deps
 
   return async function tracePanel(id: number): Promise<TracePanel | null> {
     const trace = await reader.traceById(id)
@@ -48,7 +49,8 @@ export function createTracePanelQuery(deps: { reader: TelemetryReader; turns: Tu
     const localTurn = turns.localTurn(spans)
     const storedTools = expandToolCounts(await reader.toolCountsForTrace(id))
     const tools = localTurn?.tools.length ? localTurn.tools : storedTools
-    const priced = spans.map((span) => ({ span, cost: spanCost(span) }))
+    const cost = costExplorerFor(spans, costEstimator)
+    const priced = spans.map((span) => ({ span, cost: costEstimator(span).knownUsd }))
     const totalCost = sumBy(priced, (s) => s.cost)
     const hit = cacheHitShare(trace.totals)
     const durationMs = trace.endedAt - trace.startedAt
@@ -59,6 +61,7 @@ export function createTracePanelQuery(deps: { reader: TelemetryReader; turns: Tu
       spans: priced,
       localTurn,
       totalCost,
+      cost,
       tokenLoad: tokenLoad(trace.totals),
       hit,
       durationMs,
@@ -76,6 +79,7 @@ export function createTracePanelQuery(deps: { reader: TelemetryReader; turns: Tu
         hit,
         spanCount: trace.spanCount,
         totalCost,
+        costComplete: cost.status === 'complete',
         localTools: tools,
         localNotes: localTurn?.commentary.length ?? 0,
         maxContextIn: contextPeak,
@@ -98,7 +102,7 @@ export function createTracePanelQuery(deps: { reader: TelemetryReader; turns: Tu
 
 function contextSize(span: Span): number {
   const cacheRead = span.usage.cacheRead ?? 0
-  return freshInputTokens(span.provider, span.usage.input ?? 0, cacheRead) + cacheRead + (span.usage.cacheCreation ?? 0)
+  return freshInputTokens(span.provider, span.usage.input ?? 0, cacheRead, span.usage.cacheCreation ?? 0) + cacheRead + (span.usage.cacheCreation ?? 0)
 }
 
 function costDriver(spans: PricedSpan[]): PricedSpan | null {
